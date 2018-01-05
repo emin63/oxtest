@@ -23,7 +23,7 @@ class DockerBuildConf(object):
     """
 
     def __init__(self, img_name, container_name, build_args, build_dir,
-                 dports=(), docker_net='bridge'):
+                 dports=(), docker_net='bridge', no_cache=False):
         """
 
         :arg img_name:        String name for docker image to create.
@@ -41,6 +41,14 @@ class DockerBuildConf(object):
                                    binding the simple http server to serve
                                    secrets.
 
+        :arg no_cache=False:  Optional flag to prevent caching. Generally,
+                              you are better off putting a line like 
+                              ARG build_date=SPECIFY_THIS_ON_BUILD
+                              in your Dockerfile and then providing
+                              a build arg of the current date to not cache
+                              from that point on. But if you want to force a
+                              full, clean, rebuild use no_cache=True.
+
         """
         self.img_name = img_name
         self.container_name = container_name
@@ -48,6 +56,7 @@ class DockerBuildConf(object):
         self.build_dir = build_dir
         self.dports = dports
         self.docker_net = docker_net
+        self.no_cache = no_cache
 
     def pretty(self):
         """Pretty print config info.
@@ -119,8 +128,16 @@ class TestProblem(object):
         self.name = name
         self.description = description
         self.screenshot = None
-
+        self.source = None
         self.grab_screenshot(driver)
+        self.grab_source(driver)
+
+    def grab_source(self, driver):
+        """If driver is None, grab page source and save it in self.source.
+        """
+        if driver is None:
+            return
+        self.source = driver.page_source
 
     def grab_screenshot(self, driver):
         """If driver is None, grab a screnshot and save it in self.screenshot.
@@ -215,15 +232,35 @@ class DockerTester(object):
                    Call hserver.terminate() when done (where hserver is the
                    return value of this function).
         """
-        bind = subprocess.check_output([
-            'docker', 'inspect', '-f', "'{{ (index .IPAM.Config 0).Gateway}}'",
-            self.build_conf.docker_net])
+        bind = self.get_docker_net_ip()
         cmd_line = ('%s -m http.server %s --bind %s' % (
             sys.executable, port, bind)).split()
         hserver = subprocess.Popen(
             cmd_line, cwd=default_dir if default_dir else (
                 os.getenv('HOME')))
         return hserver
+
+    def get_docker_net_ip(self):
+        """Find the IP for the docker subnet and return it.
+        
+        ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+        
+        :returns:  String indicating IP address for docker subnet.
+        
+        ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+        
+        PURPOSE:   Often docker is tied to a specific subnet. If we want
+                   to do networking, we need that subnet. This method
+                   tries to get it and return it.
+        """
+        inspect_key = "'{{ (index .IPAM.Config 0).Gateway}}'"
+        cmd_line = ['docker', 'inspect', '-f', inspect_key,
+                    self.build_conf.docker_net]
+        result = subprocess.check_output(cmd_line)
+        if isinstance(result, bytes):
+            result = result.decode('utf8')
+        result = result.strip().strip("'").strip()
+        return result
 
     def build_docker(self, auto_delete=True):
         """Build the docker image.
@@ -246,6 +283,8 @@ class DockerTester(object):
                     'build_date=UTC__%s' % build_date, '-t', image_name]
         for barg in self.build_conf.build_args:
             cmd_line.extend(['--build-arg', barg])
+        if self.build_conf.no_cache:
+            cmd_line.append('--no-cache')
 
         logging.info('Building with command line: %s', str(cmd_line))
         dbuilder = subprocess.Popen(cmd_line, cwd=build_dir)
@@ -498,6 +537,9 @@ class DockerTester(object):
         text = ['Finished testing %s at %s' % (name, datetime.datetime.now())]
         if problems:
             text.append('Problems are:\n%s\n' % '\n'.join(map(str, problems)))
+            text.extend([
+                '\n\nYou may check https://github.com/emin63/oxtest for the\n'
+                'README.md to see tips and tricks for running and debugging.'])
         text = '\n'.join(text)
 
         if email:
@@ -512,6 +554,11 @@ class DockerTester(object):
                     img = MIMEImage(item.screenshot,
                                     name='%s.png' % item.name)
                     msg.attach(img)
+                if getattr(item, 'source', None):
+                    attachment = MIMEText(item.source)
+                    attachment.add_header('Content-Disposition', 'attachment',
+                                          filename='%s.html' % item.name)
+                    msg.attach(attachment)
             text_attachments = list(text_attachments)
             for item_name, text in (list(text_attachments) + [
                     (item.name + '.txt', item.description)
