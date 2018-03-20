@@ -468,12 +468,13 @@ class DockerTester(object):
         hserver = self.start_http_helper()
         try:
             self.build_docker()
+            self.create_container()
         finally:
             hserver.terminate()
             hserver.wait(timeout=1)
         if not hserver.returncode:
             raise ValueError('HTTP server did not terminate when asked')
-        self.create_container()
+
         self.start_container()
         if self.test_conf.tester_log_level is not None:
             log_capture_string = io.StringIO()
