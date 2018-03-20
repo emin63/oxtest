@@ -39,10 +39,15 @@ class DockerBuildConf(object):
 
         :arg docker_net='bridge':  Name of docker network. This is used in
                                    binding the simple http server to serve
-                                   secrets.
+                                   secrets if it exists. If this docker network
+                                   does not exit, then we omit the -bind
+                                   argument when creating the server. Usually,
+                                   things can work without this. If you have
+                                   problems you can try creating the docker
+                                   bridge network and see if it helps.
 
         :arg no_cache=False:  Optional flag to prevent caching. Generally,
-                              you are better off putting a line like 
+                              you are better off putting a line like
                               ARG build_date=SPECIFY_THIS_ON_BUILD
                               in your Dockerfile and then providing
                               a build arg of the current date to not cache
@@ -233,8 +238,11 @@ class DockerTester(object):
                    return value of this function).
         """
         bind = self.get_docker_net_ip()
-        cmd_line = ('%s -m http.server %s --bind %s' % (
-            sys.executable, port, bind)).split()
+        cmd_line = ('%s -m http.server %s' % (sys.executable, port))
+        if bind:
+            cmd_line += ' -bind %s' % bind
+        cmd_line = cmd_line.split()
+        logging.info('Launching simple HTTP server via: %s', cmd_line)
         hserver = subprocess.Popen(
             cmd_line, cwd=default_dir if default_dir else (
                 os.getenv('HOME')))
@@ -242,13 +250,13 @@ class DockerTester(object):
 
     def get_docker_net_ip(self):
         """Find the IP for the docker subnet and return it.
-        
+
         ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
-        
+
         :returns:  String indicating IP address for docker subnet.
-        
+
         ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
-        
+
         PURPOSE:   Often docker is tied to a specific subnet. If we want
                    to do networking, we need that subnet. This method
                    tries to get it and return it.
