@@ -356,7 +356,26 @@ class DockerTester(object):
 
         """
         cmd_line = 'docker stop %s' % self.build_conf.container_name
-        subprocess.check_call(cmd_line.split())
+        return subprocess.check_call(cmd_line.split())
+
+    def connect_container(self, network_name):
+        """Connect container to given network_name.
+
+        :param network_name:     String name of network to connect to.
+
+        ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+
+        :returns:  Result of calling subprocess.check_call to connect
+                   container to given network.
+
+        ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+
+        PURPOSE:   Connect container to a network.
+
+        """
+        cmd_line = 'docker network connect %s %s' % (
+            network_name, self.build_conf.container_name)
+        return subprocess.check_call(cmd_line.split())        
 
     @staticmethod
     def check_dock_obj(object_name, re_raise=False):
