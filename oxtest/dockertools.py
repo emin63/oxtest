@@ -4,6 +4,7 @@ This module provides various tools for building and testing a docker image.
 See the `DockerTester` class for details.
 """
 
+import traceback
 import tempfile
 import datetime
 import logging
@@ -375,7 +376,7 @@ class DockerTester(object):
         """
         cmd_line = 'docker network connect %s %s' % (
             network_name, self.build_conf.container_name)
-        return subprocess.check_call(cmd_line.split())        
+        return subprocess.check_call(cmd_line.split())
 
     @staticmethod
     def check_dock_obj(object_name, re_raise=False):
@@ -463,6 +464,8 @@ class DockerTester(object):
             ename = getattr(kls, '__name__', 'unknown') if (
                 kls is not None) else 'unknown'
             msg = 'Get Exception %s: "%s" in running tester.' % (ename, my_exc)
+            my_tb = traceback.format_exc()
+            msg += '\nTraceback:\n%s' % my_tb
             logging.error(msg)
             problems.append(TestProblem('Exception', msg))
 
