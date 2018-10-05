@@ -41,7 +41,7 @@ class DockerBuildConf(object):
         :arg docker_net='bridge':  Name of docker network. This is used in
                                    binding the simple http server to serve
                                    secrets if it exists. If this docker network
-                                   does not exit, then we omit the -bind
+                                   does not exit, then we omit the --bind
                                    argument when creating the server. Usually,
                                    things can work without this. If you have
                                    problems you can try creating the docker
@@ -241,7 +241,7 @@ class DockerTester(object):
         bind = self.get_docker_net_ip()
         cmd_line = ('%s -m http.server %s' % (sys.executable, port))
         if bind:
-            cmd_line += ' -bind %s' % bind
+            cmd_line += ' --bind %s' % bind
         cmd_line = cmd_line.split()
         logging.info('Launching simple HTTP server via: %s', cmd_line)
         hserver = subprocess.Popen(
@@ -498,12 +498,13 @@ class DockerTester(object):
         hserver = self.start_http_helper()
         try:
             self.build_docker()
+            self.create_container()
         finally:
             hserver.terminate()
             hserver.wait(timeout=1)
         if not hserver.returncode:
             raise ValueError('HTTP server did not terminate when asked')
-        self.create_container()
+
         self.start_container()
         if self.test_conf.tester_log_level is not None:
             log_capture_string = io.StringIO()
